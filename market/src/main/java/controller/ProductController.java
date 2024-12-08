@@ -23,8 +23,6 @@ public class ProductController {
         return products;
     }
     
-    
-    
 
     // Tambahkan produk baru ke daftar dan simpan ke file
     public void addProduct(Product product) {
@@ -80,6 +78,45 @@ public class ProductController {
         }
     }
 
+    public Object[] getProductById(String productId) {
+        for (Object[] product : getAllProductData()) {
+            if (product[0] instanceof String && product[0].toString().equals(productId)) {
+                return product;
+            }
+        }
+        return null;
+    }
+    
+
+    public Object[][] getTopRatedProductsByCategory(String category, int limit) {
+        // Mengambil semua data produk
+        Object[][] allProducts = getAllProductData();
+    
+        return java.util.Arrays.stream(allProducts)
+            .filter(product -> product[2].toString().equalsIgnoreCase(category)) // Filter berdasarkan kategori
+            .sorted((a, b) -> Double.compare(Double.parseDouble(b[5].toString()), Double.parseDouble(a[5].toString()))) // Urutkan berdasarkan kualitas
+            .limit(limit) // Batasi jumlah produk yang ditampilkan
+            .toArray(Object[][]::new); // Mengembalikan dalam bentuk array 2D
+    }
+    
+    public void updateProductStockPay(String productId, int quantity) {
+        for (Product product : products) {
+            if (product.getId().equals(productId)) {
+                int newStock = product.getStock() - quantity;  // Mengurangi stok
+                if (newStock >= 0) {
+                    product.setStock(newStock);  // Set stok yang baru
+                    saveProductsToFile();  // Simpan perubahan ke file
+                    return;
+                } else {
+                    System.err.println("Stok tidak cukup untuk produk " + productId);
+                    return;
+                }
+            }
+        }
+        System.err.println("Produk dengan ID " + productId + " tidak ditemukan.");
+    }
+    
+    
     // Update stok produk berdasarkan ID
     public void updateProductStock(String productId, int quantity) {
         for (Product product : products) {

@@ -2,8 +2,7 @@ package view;
 
 import controller.ProductController;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.util.Arrays;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 
@@ -18,7 +17,7 @@ public class BuyerDashboardFrame extends JFrame {
         productController = new ProductController();
         initComponents();
     }
-    
+
     private void initComponents() {
         setTitle("Halaman Pembeli");
         setSize(1000, 700);
@@ -27,111 +26,220 @@ public class BuyerDashboardFrame extends JFrame {
         setLayout(new BorderLayout());
     
         // Panel pencarian dan sorting
-        JPanel searchSortPanel = new JPanel();
+        JPanel searchSortPanel = createSearchSortPanel();
+        add(searchSortPanel, BorderLayout.NORTH);
+    
+        // Grid panel untuk 3 bagian
+        JPanel mainPanel = new JPanel(new GridLayout(1, 3)); // 1 baris, 3 kolom
+        add(mainPanel, BorderLayout.CENTER);
+    
+        // Panel kiri: Produk
+        JPanel productPanel = new JPanel(new BorderLayout());
+        createProductTable();
+        productPanel.add(new JScrollPane(productTable), BorderLayout.CENTER);
+        mainPanel.add(productPanel);
+    
+        // Panel tengah: Rekomendasi Produk
+        JPanel recommendationPanel = createRecommendationPanel();
+        mainPanel.add(recommendationPanel);
+    
+        // Panel kanan: Keranjang
+        JPanel cartPanel = new JPanel(new BorderLayout());
+        cartTableModel = new DefaultTableModel(new String[]{"ID", "Nama", "Kategori", "Harga", "Jumlah"}, 0);
+        cartTable = new JTable(cartTableModel);
+        cartPanel.add(new JScrollPane(cartTable), BorderLayout.CENTER);
+        mainPanel.add(cartPanel);
+    
+        // Panel Transaksi di bawah
+        JPanel transactionPanel = createTransactionPanel();
+        add(transactionPanel, BorderLayout.SOUTH);
+    }
+
+    private JPanel createRecommendationPanel() {
+        JPanel recommendationPanel = new JPanel(new GridLayout(3, 1));
+        recommendationPanel.setBorder(BorderFactory.createTitledBorder("Rekomendasi Produk"));
+    
+        // Input kategori dan tombol cari
+        JPanel inputPanel = new JPanel();
+        JTextField categoryField = new JTextField(15);
+        JButton searchRecommendationButton = new JButton("Cari Rekomendasi");
+    
+        inputPanel.add(new JLabel("Kategori:"));
+        inputPanel.add(categoryField);
+        inputPanel.add(searchRecommendationButton);
+    
+        // Tabel rekomendasi
+        String[] recommendationColumns = {"ID", "Nama", "Kategori", "Harga", "Stock"};
+        DefaultTableModel recommendationTableModel = new DefaultTableModel(recommendationColumns, 0);
+        JTable recommendationTable = new JTable(recommendationTableModel);
+        JScrollPane recommendationScrollPane = new JScrollPane(recommendationTable);
+    
+        recommendationPanel.add(inputPanel);  // Menambahkan inputPanel ke grid pertama
+        recommendationPanel.add(recommendationScrollPane);  // Menambahkan tabel ke grid kedua
+    
+        // Action tombol cari rekomendasi
+        searchRecommendationButton.addActionListener(e -> {
+    String kategori = categoryField.getText().trim();
+    if (kategori.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Masukkan kategori terlebih dahulu!");
+    } else {
+        recommendationTableModel.setRowCount(0); // Menghapus data tabel sebelumnya
+        Object[][] produkRekomendasi = productController.getTopRatedProductsByCategory(kategori, 5);
+        
+        if (produkRekomendasi.length > 0) {
+            // Mengurutkan produk berdasarkan kualitas (terbaik di atas)
+            Arrays.sort(produkRekomendasi, (a, b) -> 
+                Double.compare(Double.parseDouble(b[5].toString()), Double.parseDouble(a[5].toString()))
+            );
+            // Menambahkan produk yang telah disortir ke dalam tabel
+            for (Object[] produk : produkRekomendasi) {
+                recommendationTableModel.addRow(produk);
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Tidak ada produk yang cocok dengan kategori " + kategori);
+        }
+    }
+});
+
+
+        return recommendationPanel;
+    }
+
+    private JPanel createTransactionPanel() {
+        JPanel transactionPanel = new JPanel(new GridLayout(2, 1));
+
+        // Panel Tambah Pesanan
+        JPanel addOrderPanel = new JPanel();
+        JTextField productIdOrders = new JTextField(10);
+        JButton addOrderButton = new JButton("Tambah ke Keranjang");
+
+        addOrderPanel.add(new JLabel("ID Produk:"));
+        addOrderPanel.add(productIdOrders);
+        addOrderPanel.add(addOrderButton);
+
+        // Panel Pembayaran
+        JPanel paymentPanel = new JPanel();
+        JLabel totalLabel = new JLabel("Total Harga: 0");
+        JTextField paymentField = new JTextField(10);
+        JButton payButton = new JButton("Bayar");
+
+        paymentPanel.add(totalLabel);
+        paymentPanel.add(new JLabel("Bayar:"));
+        paymentPanel.add(paymentField);
+        paymentPanel.add(payButton);
+
+        // Tambahkan panel ke transactionPanel
+        transactionPanel.add(addOrderPanel);
+        transactionPanel.add(paymentPanel);
+
+        // Action untuk Tambah Pesanan
+        addOrderButton.addActionListener(e -> {
+            String productIdOrder = productIdOrders.getText().trim();
+            if (productIdOrder.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "ID Produk tidak boleh kosong!");
+                return;
+            }
+
+            // Mendapatkan produk berdasarkan ID
+            Object[] productOrder = productController.getProductById(productIdOrder);
+            if (productOrder != null) {
+                // Menambahkan produk ke tabel keranjang
+                cartTableModel.addRow(productOrder);
+                updateTotalPrice(totalLabel); // Memperbarui total harga
+                JOptionPane.showMessageDialog(this, "Produk berhasil ditambahkan ke keranjang!");
+            } else {
+                JOptionPane.showMessageDialog(this, "Produk dengan ID " + productIdOrder + " tidak ditemukan!");
+            }
+        });
+
+        // Action untuk Pembayaran
+        payButton.addActionListener(e -> {
+            String paymentStr = paymentField.getText();
+            if (paymentStr.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Masukkan jumlah pembayaran!");
+                return;
+            }
+        
+            try {
+                double payment = Double.parseDouble(paymentStr);
+                double total = calculateTotalPrice();
+        
+                if (payment < total) {
+                    JOptionPane.showMessageDialog(this, "Pembayaran gagal! Uang tidak cukup.");
+                } else {
+                    double change = payment - total;
+                    JOptionPane.showMessageDialog(this, "Pembayaran berhasil! Kembalian: Rp " + change);
+        
+                    // Update stok produk
+                    for (int i = 0; i < cartTableModel.getRowCount(); i++) {
+                        String productId = cartTableModel.getValueAt(i, 0).toString();
+                        int quantity = Integer.parseInt(cartTableModel.getValueAt(i, 4).toString());
+                        productController.updateProductStockPay(productId, quantity);
+                    }
+        
+                    // Kosongkan keranjang setelah pembayaran
+                    cartTableModel.setRowCount(0);
+                    totalLabel.setText("Total Harga: 0");
+                }
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(this, "Masukkan nominal pembayaran yang valid!");
+            }
+        });
+        
+
+        return transactionPanel;
+    }
+    private void createProductTable() {
+        String[] productColumns = {"ID", "Nama", "Kategori", "Harga", "Stok", "Kualitas"};
+        tableModel = new DefaultTableModel(productColumns, 0);
+        productTable = new JTable(tableModel);
+
+        // Isi tabel dengan data produk
+        Object[][] allProducts = productController.getAllProductData();
+        for (Object[] product : allProducts) {
+            tableModel.addRow(product);
+        }
+    }
+
+    private JPanel createSearchSortPanel() {
+        JPanel panel = new JPanel();
         JTextField searchField = new JTextField(20);
         JButton searchButton = new JButton("Cari");
-        
 
         String[] sortOptions = {"Harga (Termurah)", "Harga (Termahal)", "Kualitas (Terbaik)", "Kualitas (Terjelek)"};
         JComboBox<String> sortComboBox = new JComboBox<>(sortOptions);
         JButton applySort = new JButton("Terapkan Sorting");
 
-        searchSortPanel.add(new JLabel("Cari Produk:"));
-        searchSortPanel.add(searchField);
-        searchSortPanel.add(searchButton);
-        searchSortPanel.add(new JLabel("Urutkan:"));
-        searchSortPanel.add(sortComboBox);
-        searchSortPanel.add(applySort);
-        add(searchSortPanel, BorderLayout.NORTH);
-    
-        String[] productColumns = {"ID", "Nama", "Kategori", "Harga", "Stok", "Kualitas", "Pabrikan"};
-        tableModel = new DefaultTableModel(productColumns, 0);
-        productTable = new JTable(tableModel);
-        JScrollPane productScrollPane = new JScrollPane(productTable);
+        panel.add(new JLabel("Cari Produk:"));
+        panel.add(searchField);
+        panel.add(searchButton);
+        panel.add(new JLabel("Urutkan:"));
+        panel.add(sortComboBox);
+        panel.add(applySort);
 
-        cartTable = new JTable(cartTableModel);
-        JScrollPane cartScrollPane = new JScrollPane(cartTable);
-        
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-    splitPane.setLeftComponent(productScrollPane);
-    splitPane.setRightComponent(cartScrollPane);
-    splitPane.setDividerLocation(0.6);
-    add(splitPane, BorderLayout.CENTER);
-        
-    JPanel recommendationPanel = new JPanel();
-    JButton showRecommendationsButton = new JButton("Lihat Rekomendasi Produk");
-    recommendationPanel.add(showRecommendationsButton);
-    add(recommendationPanel, BorderLayout.SOUTH);
+        searchButton.addActionListener(e -> searchProducts(searchField.getText()));
+        applySort.addActionListener(e -> sortProducts((String) sortComboBox.getSelectedItem()));
 
-        // Button Kembali
-        JButton backButton = new JButton("Kembali ke Login");
-        backButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                new LoginFrame().setVisible(true);
-                dispose();
-            }
-        });
-        recommendationPanel.add(backButton);
+        return panel;
+    }
 
-        // Action Listeners
-        searchButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String keyword = searchField.getText();
-                searchProducts(keyword);
-            }    
-        });
+    private void updateTotalPrice(JLabel totalLabel) {
+        double total = calculateTotalPrice();
+        totalLabel.setText("Total Harga: Rp " + total);
+    }
 
-        applySort.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                String selectedSort = (String) sortComboBox.getSelectedItem();
-                sortProducts(selectedSort);
-            }
-
-        });
-
-        JButton addToCartButton = new JButton("Tambah ke Keranjang");
-JButton removeFromCartButton = new JButton("Hapus dari Keranjang");
-JButton checkoutButton = new JButton("Checkout");
-
-        addToCartButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                addSelectedProductToCart();
-            }
-        });
-        
-        removeFromCartButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                removeSelectedProductFromCart();
-            }
-        });
-        
-        checkoutButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                performCheckout();
-            }
-        });
-        
-
-        showRecommendationsButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                showRecommendedProducts();
-            }
-        });
+    private double calculateTotalPrice() {
+        double total = 0;
+        for (int i = 0; i < cartTableModel.getRowCount(); i++) {
+            total += Double.parseDouble(cartTableModel.getValueAt(i, 3).toString());
+        }
+        return total;
     }
 
     private void searchProducts(String keyword) {
-        // Implementasi pencarian produk
-        // Filter tabel produk berdasarkan keyword
         tableModel.setRowCount(0);
         Object[][] allProducts = productController.getAllProductData();
-        
+
         for (Object[] product : allProducts) {
             if (product[1].toString().toLowerCase().contains(keyword.toLowerCase())) {
                 tableModel.addRow(product);
@@ -140,132 +248,26 @@ JButton checkoutButton = new JButton("Checkout");
     }
 
     private void sortProducts(String sortOption) {
-        // Implementasi sorting produk
         Object[][] allProducts = productController.getAllProductData();
-        
-        switch(sortOption) {
+
+        switch (sortOption) {
             case "Harga (Termurah)":
-                // Sorting berdasarkan harga terendah
-                java.util.Arrays.sort(allProducts, (a, b) -> 
-                    Double.compare(Double.parseDouble(a[3].toString()), 
-                                   Double.parseDouble(b[3].toString())));
+                java.util.Arrays.sort(allProducts, (a, b) -> Double.compare(Double.parseDouble(a[3].toString()), Double.parseDouble(b[3].toString())));
                 break;
             case "Harga (Termahal)":
-                // Sorting berdasarkan harga tertinggi
-                java.util.Arrays.sort(allProducts, (a, b) -> 
-                    Double.compare(Double.parseDouble(b[3].toString()), 
-                                   Double.parseDouble(a[3].toString())));
+                java.util.Arrays.sort(allProducts, (a, b) -> Double.compare(Double.parseDouble(b[3].toString()), Double.parseDouble(a[3].toString())));
                 break;
             case "Kualitas (Terbaik)":
-                // Sorting berdasarkan kualitas tertinggi
-                java.util.Arrays.sort(allProducts, (a, b) -> 
-                    Double.compare(Double.parseDouble(b[5].toString()), 
-                                   Double.parseDouble(a[5].toString())));
+                java.util.Arrays.sort(allProducts, (a, b) -> Double.compare(Double.parseDouble(b[5].toString()), Double.parseDouble(a[5].toString())));
                 break;
             case "Kualitas (Terjelek)":
-                // Sorting berdasarkan kualitas terendah
-                java.util.Arrays.sort(allProducts, (a, b) -> 
-                    Double.compare(Double.parseDouble(a[5].toString()), 
-                                   Double.parseDouble(b[5].toString())));
+                java.util.Arrays.sort(allProducts, (a, b) -> Double.compare(Double.parseDouble(a[5].toString()), Double.parseDouble(b[5].toString())));
                 break;
         }
-        
-        // Perbarui tabel dengan data yang sudah diurutkan
+
         tableModel.setRowCount(0);
         for (Object[] product : allProducts) {
             tableModel.addRow(product);
         }
-    }
-
-    private void addSelectedProductToCart() {
-        int selectedRow = productTable.getSelectedRow();
-        if (selectedRow != -1) {
-            // Ambil data produk yang dipilih
-            Object[] productData = new Object[4];
-            productData[0] = tableModel.getValueAt(selectedRow, 0); // ID
-            productData[1] = tableModel.getValueAt(selectedRow, 1); // Nama
-            productData[2] = tableModel.getValueAt(selectedRow, 3); // Harga
-            
-            // Minta jumlah produk
-            String quantityStr = JOptionPane.showInputDialog(this, "Masukkan jumlah produk:");
-            try {
-                int quantity = Integer.parseInt(quantityStr);
-                productData[3] = quantity;
-                
-                // Cek stok
-                int currentStock = Integer.parseInt(tableModel.getValueAt(selectedRow, 4).toString());
-                if (quantity <= currentStock) {
-                    cartTableModel.addRow(productData);
-                    
-                    // Kurangi stok
-                    tableModel.setValueAt(currentStock - quantity, selectedRow, 4);
-                } else {
-                    JOptionPane.showMessageDialog(this, "Stok tidak mencukupi!");
-                }
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, "Masukkan jumlah yang valid!");
-            }
-        }
-    }
-
-    private void removeSelectedProductFromCart() {
-        int selectedRow = cartTable.getSelectedRow();
-        if (selectedRow != -1) {
-            cartTableModel.removeRow(selectedRow);
-        }
-    }
-
-    private void performCheckout() {
-        double totalBelanja = 0;
-        
-        // Hitung total belanja
-        for (int i = 0; i < cartTableModel.getRowCount(); i++) {
-            double harga = Double.parseDouble(cartTableModel.getValueAt(i, 2).toString());
-            int jumlah = Integer.parseInt(cartTableModel.getValueAt(i, 3).toString());
-            totalBelanja += harga * jumlah;
-        }
-        
-        // Minta pembayaran
-        String paymentStr = JOptionPane.showInputDialog(this, 
-            "Total Belanja: Rp " + String.format("%.2f", totalBelanja) + "\nMasukkan Nominal Pembayaran:");
-        
-        try {
-            double payment = Double.parseDouble(paymentStr);
-            
-            if (payment >= totalBelanja) {
-                double kembalian = payment - totalBelanja;
-                JOptionPane.showMessageDialog(this, 
-                    "Pembayaran Berhasil!\nTotal: Rp " + String.format("%.2f", totalBelanja) + 
-                    "\nPembayaran: Rp " + String.format("%.2f", payment) + 
-                    "\nKembalian: Rp " + String.format("%.2f", kembalian));
-                
-                // Kosongkan keranjang
-                cartTableModel.setRowCount(0);
-            } else {
-                JOptionPane.showMessageDialog(this, "Pembayaran Kurang!");
-            }
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Masukkan nominal pembayaran yang valid!");
-        }
-    }
-
-    private void showRecommendedProducts() {
-        // Implementasi rekomendasi produk
-        // Misalnya, tampilkan produk dengan kualitas tertinggi
-        Object[][] allProducts = productController.getAllProductData();
-        
-        // Urutkan berdasarkan kualitas
-        java.util.Arrays.sort(allProducts, (a, b) -> 
-            Double.compare(Double.parseDouble(b[5].toString()), 
-                           Double.parseDouble(a[5].toString())));
-        
-        // Ambil 5 produk teratas
-        StringBuilder recommendations = new StringBuilder("Rekomendasi Produk:\n");
-        for (int i = 0; i < Math.min(5, allProducts.length); i++) {
-            recommendations.append(String.format("%d. %s (Kualitas: %.1f)\n", 
-                i+1, allProducts[i][1], Double.parseDouble(allProducts[i][5].toString())));
-        }
-        
-        JOptionPane.showMessageDialog(this, recommendations.toString());
     }
 }
