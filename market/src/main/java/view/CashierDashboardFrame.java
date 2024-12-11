@@ -1,13 +1,12 @@
 package view;
 
 import controller.ProductController;
-import model.Product;
-
 import java.awt.*;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableModel;
 import javax.swing.table.TableRowSorter;
+import model.Product;
 
 public class CashierDashboardFrame extends JFrame {
     private ProductController productController;
@@ -28,17 +27,19 @@ public class CashierDashboardFrame extends JFrame {
 
         // Panel Pencarian
         JPanel searchPanel = new JPanel();
-        searchField = new JTextField(20);
-        JButton searchButton = new JButton("Cari");
-        JButton addProductButton = new JButton("Tambah Produk");
-        JButton checkProductButton = new JButton("Cek Produk");
+    searchField = new JTextField(20);
+    JButton searchButton = new JButton("Cari Nama");
+    JButton searchByIdButton = new JButton("Cari ID");
+    JButton addProductButton = new JButton("Tambah Produk");
+    JButton checkProductButton = new JButton("Cek Produk");
 
-        searchPanel.add(searchField);
-        searchPanel.add(searchButton);
-        searchPanel.add(addProductButton);
-        searchPanel.add(checkProductButton);
+    searchPanel.add(searchField);
+    searchPanel.add(searchButton);
+    searchPanel.add(searchByIdButton);
+    searchPanel.add(addProductButton);
+    searchPanel.add(checkProductButton);
 
-        add(searchPanel, BorderLayout.NORTH);
+    add(searchPanel, BorderLayout.NORTH);
 
         // Tabel Produk
         productTable = new JTable();
@@ -56,6 +57,7 @@ public class CashierDashboardFrame extends JFrame {
 
         // Action Listeners
         searchButton.addActionListener(e -> searchProducts());
+        searchByIdButton.addActionListener(e -> searchProductsById());
         addProductButton.addActionListener(e -> showAddProductDialog());
         checkProductButton.addActionListener(e -> {
             CheckProductFrame checkFrame = new CheckProductFrame();
@@ -76,6 +78,40 @@ public class CashierDashboardFrame extends JFrame {
         productTable.setRowSorter(sorter);
         sorter.setRowFilter(RowFilter.regexFilter("(?i)" + keyword));
     }
+    private void searchProductsById() {
+        String keyword = searchField.getText().trim();
+        if (!keyword.isEmpty()) {
+            try {
+                // Mengonversi keyword ke ID produk (integer)
+                int id = Integer.parseInt(keyword);
+    
+                // Mencari produk berdasarkan ID
+                Product product = productController.searchProductById(String.valueOf(id));
+                if (product != null) {
+                    // Tampilkan produk yang ditemukan di tabel
+                    String[] columnNames = {"ID", "Nama", "Kategori", "Harga", "Stok", "Kualitas"};
+                    Object[][] data = {
+                        {
+                            product.getId(),
+                            product.getName(),
+                            product.getCategory(),
+                            product.getPrice(),
+                            product.getStock(),
+                            product.getQualityRating()
+                        }
+                    };
+                    productTable.setModel(new DefaultTableModel(data, columnNames));
+                } else {
+                    JOptionPane.showMessageDialog(this, "Produk dengan ID " + id + " tidak ditemukan.");
+                }
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "ID produk harus berupa angka!");
+            }
+        }
+    }
+    
+    
+    
 
     private void showAddProductDialog() {
         JTextField nameField = new JTextField();

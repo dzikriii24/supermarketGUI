@@ -33,6 +33,7 @@ public class BuyerDashboardFrame extends JFrame {
         JPanel mainPanel = new JPanel(new GridLayout(1, 3)); // 1 baris, 3 kolom
         add(mainPanel, BorderLayout.CENTER);
     
+        
         // Panel kiri: Produk
         JPanel productPanel = new JPanel(new BorderLayout());
         createProductTable();
@@ -53,6 +54,7 @@ public class BuyerDashboardFrame extends JFrame {
         // Panel Transaksi di bawah
         JPanel transactionPanel = createTransactionPanel();
         add(transactionPanel, BorderLayout.SOUTH);
+
     }
 
     private JPanel createRecommendationPanel() {
@@ -78,7 +80,7 @@ public class BuyerDashboardFrame extends JFrame {
         recommendationPanel.add(recommendationScrollPane);  // Menambahkan tabel ke grid kedua
     
         // Action tombol cari rekomendasi
-        searchRecommendationButton.addActionListener(e -> {
+    searchRecommendationButton.addActionListener(e -> {
     String kategori = categoryField.getText().trim();
     if (kategori.isEmpty()) {
         JOptionPane.showMessageDialog(this, "Masukkan kategori terlebih dahulu!");
@@ -111,10 +113,13 @@ public class BuyerDashboardFrame extends JFrame {
         // Panel Tambah Pesanan
         JPanel addOrderPanel = new JPanel();
         JTextField productIdOrders = new JTextField(10);
+        JTextField quantityOrders = new JTextField(5);
         JButton addOrderButton = new JButton("Tambah ke Keranjang");
 
         addOrderPanel.add(new JLabel("ID Produk:"));
         addOrderPanel.add(productIdOrders);
+        addOrderPanel.add(new JLabel("Jumlah:"));
+        addOrderPanel.add(quantityOrders);
         addOrderPanel.add(addOrderButton);
 
         // Panel Pembayaran
@@ -132,19 +137,41 @@ public class BuyerDashboardFrame extends JFrame {
         transactionPanel.add(addOrderPanel);
         transactionPanel.add(paymentPanel);
 
-        // Action untuk Tambah Pesanan
         addOrderButton.addActionListener(e -> {
             String productIdOrder = productIdOrders.getText().trim();
-            if (productIdOrder.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "ID Produk tidak boleh kosong!");
+            String quantityOrderStr = quantityOrders.getText().trim();
+            if (productIdOrder.isEmpty() || quantityOrderStr.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "ID Produk dan Jumlah tidak boleh kosong!");
                 return;
             }
 
+            int quantityOrder = Integer.parseInt(quantityOrderStr);
             // Mendapatkan produk berdasarkan ID
             Object[] productOrder = productController.getProductById(productIdOrder);
             if (productOrder != null) {
-                // Menambahkan produk ke tabel keranjang
-                cartTableModel.addRow(productOrder);
+                // Cek apakah produk sudah ada di keranjang
+                boolean productExists = false;
+                for (int i = 0; i < cartTableModel.getRowCount(); i++) {
+                    String cartProductId = cartTableModel.getValueAt(i, 0).toString();
+                    if (cartProductId.equals(productOrder[0].toString())) {
+                        // Jika produk sudah ada, tambahkan jumlahnya dan update harga
+                        int currentQuantity = Integer.parseInt(cartTableModel.getValueAt(i, 4).toString());
+                        int newQuantity = currentQuantity + quantityOrder; // Tambahkan jumlah sesuai input
+                        cartTableModel.setValueAt(newQuantity, i, 4);
+                        double newPrice = newQuantity * Double.parseDouble(productOrder[3].toString());
+                        cartTableModel.setValueAt(newPrice, i, 3);
+                        productExists = true;
+                        break;
+                    }
+                }
+
+                if (!productExists) {
+                    // Jika produk belum ada, tambahkan sebagai entri baru
+                    productOrder[4] = quantityOrder; // Set jumlah produk ke keranjang
+                    double price = quantityOrder * Double.parseDouble(productOrder[3].toString());
+                    cartTableModel.addRow(new Object[]{productOrder[0], productOrder[1], productOrder[2], price, quantityOrder});
+                }
+
                 updateTotalPrice(totalLabel); // Memperbarui total harga
                 JOptionPane.showMessageDialog(this, "Produk berhasil ditambahkan ke keranjang!");
             } else {
@@ -153,39 +180,58 @@ public class BuyerDashboardFrame extends JFrame {
         });
 
         // Action untuk Pembayaran
-        payButton.addActionListener(e -> {
-            String paymentStr = paymentField.getText();
-            if (paymentStr.isEmpty()) {
-                JOptionPane.showMessageDialog(this, "Masukkan jumlah pembayaran!");
-                return;
-            }
-        
-            try {
-                double payment = Double.parseDouble(paymentStr);
-                double total = calculateTotalPrice();
-        
-                if (payment < total) {
-                    JOptionPane.showMessageDialog(this, "Pembayaran gagal! Uang tidak cukup.");
-                } else {
-                    double change = payment - total;
-                    JOptionPane.showMessageDialog(this, "Pembayaran berhasil! Kembalian: Rp " + change);
-        
-                    // Update stok produk
-                    for (int i = 0; i < cartTableModel.getRowCount(); i++) {
-                        String productId = cartTableModel.getValueAt(i, 0).toString();
-                        int quantity = Integer.parseInt(cartTableModel.getValueAt(i, 4).toString());
-                        productController.updateProductStockPay(productId, quantity);
-                    }
-        
-                    // Kosongkan keranjang setelah pembayaran
-                    cartTableModel.setRowCount(0);
-                    totalLabel.setText("Total Harga: 0");
+// Bagian ActionListener untuk pembayaran
+payButton.addActionListener(e -> {
+    String paymentStr = paymentField.getText();
+    if (paymentStr.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Masukkan jumlah pembayaran!");
+        return;
+    }
+
+    try {
+        double payment = Double.parseDouble(paymentStr);
+        double total = calculateTotalPrice();
+
+        if (payment < total) {
+            JOptionPane.showMessageDialog(this, "Pembayaran gagal! Uang tidak cukup.");
+        } else {
+            // Periksa stok untuk setiap produk di keranjang
+            boolean outOfStock = false;
+            for (int i = 0; i < cartTableModel.getRowCount(); i++) {
+                String productId = cartTableModel.getValueAt(i, 0).toString();
+                int quantity = Integer.parseInt(cartTableModel.getValueAt(i, 4).toString());
+
+                // Cek stok produk di database
+                int stock = productController.getProductStock(productId);
+                if (stock < quantity) {
+                    JOptionPane.showMessageDialog(this, "Stok tidak cukup untuk produk ID " + productId);
+                    outOfStock = true;
+                    break;
                 }
-            } catch (NumberFormatException ex) {
-                JOptionPane.showMessageDialog(this, "Masukkan nominal pembayaran yang valid!");
             }
-        });
-        
+
+            if (!outOfStock) {
+                // Pembayaran berhasil, update stok produk
+                for (int i = 0; i < cartTableModel.getRowCount(); i++) {
+                    String productId = cartTableModel.getValueAt(i, 0).toString();
+                    int quantity = Integer.parseInt(cartTableModel.getValueAt(i, 4).toString());
+                    productController.updateProductStockPay(productId, quantity);
+                }
+
+                double change = payment - total;
+                JOptionPane.showMessageDialog(this, "Pembayaran berhasil! Kembalian: Rp " + change);
+
+                // Kosongkan keranjang setelah pembayaran
+                cartTableModel.setRowCount(0);
+                totalLabel.setText("Total Harga: 0");
+            }
+        }
+    } catch (NumberFormatException ex) {
+        JOptionPane.showMessageDialog(this, "Masukkan nominal pembayaran yang valid!");
+    }
+});
+    
+
 
         return transactionPanel;
     }
@@ -235,6 +281,7 @@ public class BuyerDashboardFrame extends JFrame {
         }
         return total;
     }
+
 
     private void searchProducts(String keyword) {
         tableModel.setRowCount(0);

@@ -81,5 +81,8 @@ public class Product {
     public double getQualityRating() { return qualityRating; }
     public void setQualityRating(double qualityRating) { this.qualityRating = qualityRating; }
     public String getManufacturer() { return manufacturer; }
+    public void setId(String id) {
+        this.id = id;
+    }
     public void setManufacturer(String manufacturer) { this.manufacturer = manufacturer; }
 }
